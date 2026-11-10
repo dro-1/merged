@@ -5,9 +5,9 @@ import type { RepoDetails, RepoSummary } from '#/server/github'
 type BadgeTone = 'good' | 'neutral' | 'warn'
 
 const toneClass: Record<BadgeTone, string> = {
-  good: 'border-green-200 bg-green-50 text-green-800',
-  neutral: 'border-gray-200 bg-gray-50 text-gray-700',
-  warn: 'border-amber-200 bg-amber-50 text-amber-800',
+  good: 'bg-good-soft text-good',
+  neutral: 'bg-surface text-muted-foreground ring-1 ring-line ring-inset',
+  warn: 'bg-warn-soft text-warn',
 }
 
 type RepoListItemProps = {
@@ -19,22 +19,21 @@ type RepoListItemProps = {
 /** One repository in a search result list, with contributor-readiness badges and maintainer activity. */
 export function RepoListItem({ repo, details }: RepoListItemProps) {
   return (
-    <li className="py-3">
-      <div className="text-sm">
+    <li className="rounded-2xl border border-line bg-card p-5 shadow-sm transition-colors hover:border-line-strong">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
         <a
           href={repo.url}
-          className="font-medium text-blue-600 hover:underline"
+          className="font-semibold break-all text-fg hover:text-primary"
         >
           {repo.nameWithOwner}
         </a>
-        <span className="text-gray-500">
-          {' '}
-          · ★ {numberFormat.format(repo.stargazerCount)} · pushed{' '}
+        <span className="text-sm text-subtle">
+          ★ {numberFormat.format(repo.stargazerCount)} · pushed{' '}
           {dateFormat.format(new Date(repo.pushedAt))}
         </span>
       </div>
 
-      <div className="mt-1.5 flex flex-wrap gap-1.5">
+      <div className="mt-3 flex flex-wrap gap-2">
         {repo.goodFirstIssueCount > 0 && (
           <Badge tone="good">
             {numberFormat.format(repo.goodFirstIssueCount)} good first{' '}
@@ -57,9 +56,10 @@ export function RepoListItem({ repo, details }: RepoListItemProps) {
         <Await
           promise={details}
           fallback={
-            <p className="mt-1.5 animate-pulse text-xs text-gray-400">
-              Loading activity…
-            </p>
+            <div
+              aria-label="Loading activity"
+              className="mt-3 h-4 w-2/3 animate-pulse rounded bg-skeleton"
+            />
           }
         >
           {(d) => <DetailsLine details={d} />}
@@ -71,15 +71,18 @@ export function RepoListItem({ repo, details }: RepoListItemProps) {
 
 function DetailsLine({ details }: { details: RepoDetails | null }) {
   if (!details) {
-    return <p className="mt-1.5 text-xs text-gray-400">Activity unavailable</p>
+    return <p className="mt-3 text-sm text-subtle">Activity unavailable</p>
   }
   const { contributingUrl, merges, medianIssueCloseMs } = details
 
   return (
-    <p className="mt-1.5 text-xs text-gray-500">
+    <p className="mt-3 text-sm leading-5 text-muted-foreground">
       {contributingUrl && (
         <>
-          <a href={contributingUrl} className="text-blue-600 hover:underline">
+          <a
+            href={contributingUrl}
+            className="font-medium text-primary hover:underline"
+          >
             Contributing guide
           </a>
           {' · '}
@@ -109,7 +112,9 @@ function Badge({
   children: React.ReactNode
 }) {
   return (
-    <span className={`rounded border px-1.5 py-0.5 text-xs ${toneClass[tone]}`}>
+    <span
+      className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${toneClass[tone]}`}
+    >
       {children}
     </span>
   )

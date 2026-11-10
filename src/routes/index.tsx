@@ -41,14 +41,20 @@ function Home() {
   const isLoading = useRouterState({ select: (s) => s.isLoading })
 
   return (
-    <main className="p-8">
+    <main className="mx-auto max-w-3xl px-4 py-8 sm:px-6 sm:py-12">
       {isLoading && (
-        <div className="fixed inset-x-0 top-0 h-0.5 overflow-hidden bg-blue-100">
-          <div className="h-full w-1/3 animate-progress bg-blue-600" />
+        <div className="fixed inset-x-0 top-0 z-10 h-0.5 overflow-hidden bg-accent">
+          <div className="h-full w-1/3 animate-progress bg-primary" />
         </div>
       )}
 
-      <h1 className="text-2xl font-bold">Repositories</h1>
+      <header>
+        <h1 className="text-3xl font-semibold tracking-tight">merged</h1>
+        <p className="mt-2 text-muted-foreground">
+          Find open-source repos ready for your first contribution.
+        </p>
+      </header>
+
       <div className="mt-6">
         <RepoFilterPanel
           filters={filters}

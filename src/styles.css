@@ -1,6 +1,42 @@
 @import 'tailwindcss';
+@import 'tw-animate-css';
 
+/* Semantic colour tokens. Each becomes a utility (bg-card, text-muted-foreground,
+   border-line, …); dark mode only redefines the variables below. Names follow
+   shadcn's conventions so its components pick up the same palette. */
 @theme {
+  --font-sans:
+    'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+
+  --color-surface: #f7f8fa;
+  --color-card: #ffffff;
+  --color-line: #e6e8ee;
+  --color-line-strong: #cdd2dc;
+  --color-fg: #1c2230;
+  --color-muted-foreground: #5f6878;
+  --color-subtle: #8b93a3;
+  --color-primary: #4f5bd5;
+  --color-primary-foreground: #ffffff;
+  --color-accent: #eef0fd;
+  --color-good: #1f7a4d;
+  --color-good-soft: #e9f7ef;
+  --color-warn: #9a5b06;
+  --color-warn-soft: #fdf4e3;
+  --color-destructive: #c2362f;
+  --color-skeleton: #eceef3;
+
+  /* shadcn aliases, resolved at runtime so dark mode carries through. */
+  --color-background: var(--color-surface);
+  --color-foreground: var(--color-fg);
+  --color-card-foreground: var(--color-fg);
+  --color-popover: var(--color-card);
+  --color-popover-foreground: var(--color-fg);
+  --color-muted: var(--color-surface);
+  --color-accent-foreground: var(--color-fg);
+  --color-border: var(--color-line);
+  --color-input: var(--color-line-strong);
+  --color-ring: var(--color-primary);
+
   --animate-progress: progress 1.2s ease-in-out infinite;
 
   @keyframes progress {
@@ -10,6 +46,31 @@
     to {
       transform: translateX(300%);
     }
+  }
+}
+
+:root {
+  color-scheme: light dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-surface: #0f1218;
+    --color-card: #171b23;
+    --color-line: #262c37;
+    --color-line-strong: #3a4250;
+    --color-fg: #e6e9ef;
+    --color-muted-foreground: #a0a8b8;
+    --color-subtle: #6f7889;
+    --color-primary: #8f99ff;
+    --color-primary-foreground: #0f1218;
+    --color-accent: #1f2340;
+    --color-good: #6fd3a0;
+    --color-good-soft: #15291f;
+    --color-warn: #f0b862;
+    --color-warn-soft: #2e2312;
+    --color-destructive: #f07068;
+    --color-skeleton: #222833;
   }
 }
 
@@ -25,4 +86,8 @@ body,
 
 body {
   margin: 0;
+  background: var(--color-surface);
+  color: var(--color-fg);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
 }

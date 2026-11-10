@@ -1,3 +1,12 @@
+import { XIcon } from 'lucide-react'
+import { MultiSelect, dropdownTriggerClass } from '#/components/MultiSelect'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import {
   FRAMEWORKS,
   LANGUAGES,
@@ -13,137 +22,153 @@ type RepoFilterPanelProps = {
   onChange: (patch: Partial<RepoFilters>) => void
 }
 
-/** Adds `item` to `list` if absent, removes it if present: (['a'], 'b') → ['a','b']. */
-function toggleItem<T>(list: ReadonlyArray<T>, item: T): Array<T> {
-  return list.includes(item) ? list.filter((x) => x !== item) : [...list, item]
-}
+const LANGUAGE_OPTIONS = LANGUAGES.map((l) => ({ value: l.id, label: l.name }))
+const FRAMEWORK_OPTIONS = FRAMEWORKS.map((f) => ({
+  value: f.topic,
+  label: f.label,
+}))
+const STAR_OPTIONS = MIN_STARS_OPTIONS.map((o) => ({
+  value: o.value,
+  label: o.value === 0 ? o.label : `${o.label}+`,
+}))
+const PUSHED_OPTIONS = PUSHED_WITHIN_DAYS.map((days) => ({
+  value: days,
+  label: days === 365 ? '1 year' : `${days} days`,
+}))
 
-/** Click-to-apply controls for repository search filters; every change is reported immediately. */
+/** A compact toolbar of repository search filters; every change is reported immediately. */
 export function RepoFilterPanel({ filters, onChange }: RepoFilterPanelProps) {
+  const activeTags = [
+    ...LANGUAGE_OPTIONS.filter((o) => filters.langs.includes(o.value)).map(
+      (o) => ({
+        key: `lang:${o.value}`,
+        label: o.label,
+        remove: () =>
+          onChange({ langs: filters.langs.filter((l) => l !== o.value) }),
+      }),
+    ),
+    ...FRAMEWORK_OPTIONS.filter((o) =>
+      filters.frameworks.includes(o.value),
+    ).map((o) => ({
+      key: `framework:${o.value}`,
+      label: o.label,
+      remove: () =>
+        onChange({
+          frameworks: filters.frameworks.filter((f) => f !== o.value),
+        }),
+    })),
+  ]
+
   return (
-    <div className="space-y-5">
-      <Group label="Languages">
-        {LANGUAGES.map((l) => (
-          <Chip
-            key={l.id}
-            selected={filters.langs.includes(l.id)}
-            onClick={() => onChange({ langs: toggleItem(filters.langs, l.id) })}
-          >
-            {l.name}
-          </Chip>
-        ))}
-      </Group>
-
-      <Group label="Frameworks">
-        {FRAMEWORKS.map((f) => (
-          <Chip
-            key={f.topic}
-            selected={filters.frameworks.includes(f.topic)}
-            onClick={() =>
-              onChange({ frameworks: toggleItem(filters.frameworks, f.topic) })
-            }
-          >
-            {f.label}
-          </Chip>
-        ))}
-      </Group>
-
-      <Group label="Min stars">
-        {MIN_STARS_OPTIONS.map((o) => (
-          <Chip
-            key={o.value}
-            selected={filters.minStars === o.value}
-            onClick={() => onChange({ minStars: o.value })}
-          >
-            {o.label}
-          </Chip>
-        ))}
-      </Group>
-
-      <Group label="Good first issues">
-        {MIN_ISSUES_OPTIONS.map((o) => (
-          <Chip
-            key={o.value}
-            selected={filters.minGoodFirstIssues === o.value}
-            onClick={() => onChange({ minGoodFirstIssues: o.value })}
-          >
-            {o.label}
-          </Chip>
-        ))}
-      </Group>
-
-      <Group label="Help wanted issues">
-        {MIN_ISSUES_OPTIONS.map((o) => (
-          <Chip
-            key={o.value}
-            selected={filters.minHelpWantedIssues === o.value}
-            onClick={() => onChange({ minHelpWantedIssues: o.value })}
-          >
-            {o.label}
-          </Chip>
-        ))}
-      </Group>
-
-      <Group label="Pushed within">
-        <select
+    <div>
+      <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
+        <MultiSelect
+          label="Languages"
+          options={LANGUAGE_OPTIONS}
+          selected={filters.langs}
+          onChange={(langs) => onChange({ langs })}
+        />
+        <MultiSelect
+          label="Frameworks"
+          options={FRAMEWORK_OPTIONS}
+          selected={filters.frameworks}
+          onChange={(frameworks) => onChange({ frameworks })}
+        />
+        <FilterSelect
+          prefix="Stars"
+          options={STAR_OPTIONS}
+          value={filters.minStars}
+          onChange={(minStars) => onChange({ minStars })}
+        />
+        <FilterSelect
+          prefix="Good first"
+          options={MIN_ISSUES_OPTIONS}
+          value={filters.minGoodFirstIssues}
+          onChange={(minGoodFirstIssues) => onChange({ minGoodFirstIssues })}
+        />
+        <FilterSelect
+          prefix="Help wanted"
+          options={MIN_ISSUES_OPTIONS}
+          value={filters.minHelpWantedIssues}
+          onChange={(minHelpWantedIssues) => onChange({ minHelpWantedIssues })}
+        />
+        <FilterSelect
+          prefix="Pushed"
+          options={PUSHED_OPTIONS}
           value={filters.pushedWithinDays}
-          onChange={(e) => {
-            const days = PUSHED_WITHIN_DAYS.find(
-              (d) => d === Number(e.target.value),
-            )
-            if (days) onChange({ pushedWithinDays: days })
-          }}
-          className="rounded border border-gray-300 px-2 py-1 text-sm"
-        >
-          {PUSHED_WITHIN_DAYS.map((days) => (
-            <option key={days} value={days}>
-              {days} days
-            </option>
+          onChange={(pushedWithinDays) => onChange({ pushedWithinDays })}
+        />
+      </div>
+
+      {activeTags.length > 0 && (
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          {activeTags.map((tag) => (
+            <span
+              key={tag.key}
+              className="inline-flex items-center gap-1 rounded-full bg-accent py-0.5 pr-1 pl-2.5 text-xs font-medium text-fg"
+            >
+              {tag.label}
+              <button
+                type="button"
+                aria-label={`Remove ${tag.label}`}
+                onClick={tag.remove}
+                className="rounded-full p-1 text-muted-foreground hover:bg-card hover:text-fg focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+              >
+                <XIcon className="size-3" />
+              </button>
+            </span>
           ))}
-        </select>
-      </Group>
+          <button
+            type="button"
+            onClick={() => onChange({ langs: [], frameworks: [] })}
+            className="rounded px-1 text-xs font-medium text-primary hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+          >
+            Clear all
+          </button>
+        </div>
+      )}
     </div>
   )
 }
 
-function Group({
-  label,
-  children,
-}: {
-  label: string
-  children: React.ReactNode
-}) {
-  return (
-    <fieldset>
-      <legend className="mb-2 text-xs font-medium text-gray-600">
-        {label}
-      </legend>
-      <div className="flex flex-wrap gap-2">{children}</div>
-    </fieldset>
-  )
+type FilterSelectProps<T extends number> = {
+  /** Shown before the chosen option in the trigger, e.g. "Stars: 50+". */
+  prefix: string
+  options: ReadonlyArray<{ value: T; label: string }>
+  value: T
+  onChange: (value: T) => void
 }
 
-function Chip({
-  selected,
-  onClick,
-  children,
-}: {
-  selected: boolean
-  onClick: () => void
-  children: React.ReactNode
-}) {
+function FilterSelect<T extends number>({
+  prefix,
+  options,
+  value,
+  onChange,
+}: FilterSelectProps<T>) {
+  const current = options.find((o) => o.value === value)
   return (
-    <button
-      type="button"
-      aria-pressed={selected}
-      onClick={onClick}
-      className={
-        selected
-          ? 'rounded-full border border-gray-900 bg-gray-900 px-3 py-1 text-sm text-white'
-          : 'rounded-full border border-gray-300 bg-white px-3 py-1 text-sm text-gray-700 hover:border-gray-500'
-      }
+    <Select
+      value={String(value)}
+      onValueChange={(next) => {
+        const option = options.find((o) => String(o.value) === next)
+        if (option) onChange(option.value)
+      }}
     >
-      {children}
-    </button>
+      <SelectTrigger
+        aria-label={prefix}
+        className={`${dropdownTriggerClass} data-[size=default]:h-9`}
+      >
+        <SelectValue>
+          {prefix}: {current?.label}
+        </SelectValue>
+      </SelectTrigger>
+      <SelectContent>
+        {options.map((o) => (
+          <SelectItem key={o.value} value={String(o.value)}>
+            {o.label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
   )
 }

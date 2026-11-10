@@ -76,32 +76,44 @@ export function RepoResults({
 
   return (
     <>
-      <p className="mt-6 text-sm text-gray-500">
+      <p className="mt-6 text-sm text-muted-foreground">
         {isSearching
           ? 'Searching…'
           : `${numberFormat.format(firstPage.repositoryCount)} matches, showing ${repos.length}`}
       </p>
 
-      <ul className="mt-4 divide-y divide-gray-100">
-        {repos.map((repo) => (
-          <RepoListItem key={repo.id} repo={repo} details={details[repo.id]} />
-        ))}
-      </ul>
+      {repos.length > 0 ? (
+        <ul className="mt-4 space-y-3">
+          {repos.map((repo) => (
+            <RepoListItem
+              key={repo.id}
+              repo={repo}
+              details={details[repo.id]}
+            />
+          ))}
+        </ul>
+      ) : (
+        !isSearching && (
+          <div className="mt-4 rounded-2xl border border-dashed border-line-strong px-6 py-12 text-center text-muted-foreground">
+            No repos match — try removing a filter.
+          </div>
+        )
+      )}
 
       {more.hasNextPage && (
         <div className="mt-6 text-sm">
           {reachedCap ? (
-            <p className="text-gray-500">
+            <p className="text-center text-muted-foreground">
               Showing the first {MAX_RESULTS} results — narrow your filters to
               find more.
             </p>
           ) : (
-            <div className="flex items-center gap-3">
+            <div className="flex flex-col items-center gap-2">
               <button
                 type="button"
                 onClick={loadMore}
                 disabled={status === 'loading' || isSearching}
-                className="rounded border border-gray-300 px-4 py-2 font-medium text-gray-800 hover:border-gray-500 disabled:cursor-not-allowed disabled:opacity-50"
+                className="w-full rounded-xl border border-line bg-card px-4 py-3 font-medium text-fg shadow-sm transition-colors hover:border-line-strong hover:bg-surface focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {status === 'loading'
                   ? 'Loading…'
@@ -110,7 +122,7 @@ export function RepoResults({
                     : 'Load more'}
               </button>
               {status === 'error' && (
-                <span className="text-amber-700">Couldn't load more.</span>
+                <span className="text-warn">Couldn't load more.</span>
               )}
             </div>
           )}
