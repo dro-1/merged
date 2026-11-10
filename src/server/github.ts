@@ -12,12 +12,19 @@ const CACHE_TTL_MS = 5 * 60 * 1000
 /** Maximum number of repositories per getRepoDetails call. */
 export const DETAILS_BATCH_SIZE = 5
 
+/** Repositories returned per searchRepos page. */
+export const SEARCH_PAGE_SIZE = 20
+
 // Only fields that keep the search fast belong here; slower per-repo
 // fields are fetched separately by getRepoDetails.
 const SEARCH_REPOS_QUERY = /* GraphQL */ `
-  query SearchRepos($q: String!, $first: Int!) {
-    search(query: $q, type: REPOSITORY, first: $first) {
+  query SearchRepos($q: String!, $first: Int!, $after: String) {
+    search(query: $q, type: REPOSITORY, first: $first, after: $after) {
       repositoryCount
+      pageInfo {
+        endCursor
+        hasNextPage
+      }
       nodes {
         ... on Repository {
           id
@@ -90,6 +97,9 @@ export type RepoSummary = {
 export type RepoSearchResult = {
   repositoryCount: number
   repos: Array<RepoSummary>
+  /** Pass as `after` to fetch the following page; null when there is none. */
+  endCursor: string | null
+  hasNextPage: boolean
 }
 
 export type RepoDetails = {
@@ -172,59 +182,109 @@ function parseRepoIds(input: unknown): Array<string> {
   return ids
 }
 
-/** Search results are reused for 5 minutes per distinct GitHub query string. */
+/**
+ * Validates an optional pagination cursor; throws on anything but a short base64-like string.
+ * e.g. undefined → undefined, 'Y3Vyc29yOjIw' → 'Y3Vyc29yOjIw'
+ */
+function parseCursor(input: unknown): string | undefined {
+  if (input === undefined || input === null) return undefined
+  if (typeof input !== 'string' || !/^[\w+/=-]{1,200}$/.test(input)) {
+    throw new Error('Invalid cursor')
+  }
+  return input
+}
+
+/** Search results are reused for 5 minutes per page of a distinct GitHub query string. */
 const searchCache = createTtlCache<RepoSearchResult>({
   ttlMs: CACHE_TTL_MS,
-  maxEntries: 500,
-})
-
-/** Details are reused for 5 minutes per distinct batch of repository ids. */
-const detailsCache = createTtlCache<Record<string, RepoDetails>>({
-  ttlMs: CACHE_TTL_MS,
+  // A fully paged search uses up to 10 entries (one per page).
   maxEntries: 2000,
 })
 
+/** Details are reused for 5 minutes per repository; null records an id GitHub couldn't resolve. */
+const detailsCache = createTtlCache<RepoDetails | null>({
+  ttlMs: CACHE_TTL_MS,
+  maxEntries: 5000,
+})
+
+/** Fetches details for the given repository ids in one GitHub query, keyed by id. */
+async function fetchRepoDetails(
+  ids: Array<string>,
+): Promise<Record<string, RepoDetails>> {
+  const data = await githubGraphQL<{
+    nodes: Array<DetailsNode | null>
+  }>(REPO_DETAILS_QUERY, { ids })
+  const now = Date.now()
+  return Object.fromEntries(
+    data.nodes
+      // Ids of non-repository nodes resolve to `{}`, so require an id too.
+      .filter((node): node is DetailsNode => Boolean(node?.id))
+      .map((node) => [node.id, toRepoDetails(node, now)]),
+  )
+}
+
 /**
- * Searches GitHub repositories matching the given filters.
- * Runs only on the server; identical searches within the cache TTL reuse one GitHub request.
+ * Searches GitHub repositories matching the given filters, one page at a time.
+ * Pass a previous result's `endCursor` as `after` for the next page. Runs only on the
+ * server; identical page requests within the cache TTL reuse one GitHub request.
  */
 export const searchRepos = createServerFn({ method: 'GET' })
-  .validator(parseRepoFilters)
-  .handler(({ data: filters }) => {
+  .validator((input: unknown) => ({
+    filters: parseRepoFilters(input),
+    after: parseCursor((input as { after?: unknown } | null)?.after),
+  }))
+  .handler(({ data: { filters, after } }) => {
     const query = buildSearchQuery(filters)
-    return searchCache.getOrLoad(query, async () => {
+    return searchCache.getOrLoad(`${query}|${after ?? ''}`, async () => {
       const data = await githubGraphQL<{
         search: {
           repositoryCount: number
+          pageInfo: { endCursor: string | null; hasNextPage: boolean }
           nodes: Array<SearchNode | null>
         }
-      }>(SEARCH_REPOS_QUERY, { q: query, first: 20 })
+      }>(SEARCH_REPOS_QUERY, { q: query, first: SEARCH_PAGE_SIZE, after })
       return {
         repositoryCount: data.search.repositoryCount,
         repos: data.search.nodes
           .filter((node): node is SearchNode => node !== null)
           .map(toRepoSummary),
+        endCursor: data.search.pageInfo.endCursor,
+        hasNextPage: data.search.pageInfo.hasNextPage,
       }
     })
   })
 
 /**
  * Fetches contributing-guide and maintainer-activity details for a batch of repositories,
- * keyed by node id. Ids GitHub can't resolve are omitted from the result.
+ * keyed by node id. Each repository is cached on its own, so only ids not already cached
+ * are requested from GitHub. Ids GitHub can't resolve are omitted from the result.
  */
 export const getRepoDetails = createServerFn({ method: 'GET' })
   .validator((input: unknown) => ({ ids: parseRepoIds(input) }))
-  .handler(({ data: { ids } }) =>
-    detailsCache.getOrLoad(ids.join(','), async () => {
-      const data = await githubGraphQL<{
-        nodes: Array<DetailsNode | null>
-      }>(REPO_DETAILS_QUERY, { ids })
-      const now = Date.now()
-      return Object.fromEntries(
-        data.nodes
-          // Ids of non-repository nodes resolve to `{}`, so require an id too.
-          .filter((node): node is DetailsNode => Boolean(node?.id))
-          .map((node) => [node.id, toRepoDetails(node, now)]),
-      )
-    }),
-  )
+  .handler(async ({ data: { ids } }) => {
+    // The cache decides which ids need loading: each loader that actually runs
+    // records its id, and one GitHub query then fetches exactly those.
+    const toFetch: Array<string> = []
+    let resolveBatch!: (batch: Promise<Record<string, RepoDetails>>) => void
+    const batch = new Promise<Record<string, RepoDetails>>((resolve) => {
+      resolveBatch = resolve
+    })
+
+    const pending = ids.map((id) =>
+      detailsCache.getOrLoad(id, () => {
+        toFetch.push(id)
+        return batch.then((byId) => byId[id] ?? null)
+      }),
+    )
+    resolveBatch(
+      toFetch.length > 0 ? fetchRepoDetails(toFetch) : Promise.resolve({}),
+    )
+
+    const results = await Promise.all(pending)
+    return Object.fromEntries(
+      ids.flatMap((id, i) => {
+        const details = results[i]
+        return details ? [[id, details]] : []
+      }),
+    )
+  })

@@ -5,9 +5,9 @@ import {
   useRouterState,
 } from '@tanstack/react-router'
 import { RepoFilterPanel } from '#/components/RepoFilterPanel'
-import { RepoListItem } from '#/components/RepoListItem'
-import { numberFormat } from '#/helpers/format'
+import { RepoResults } from '#/components/RepoResults'
 import { requestRepoDetails } from '#/helpers/repo/details'
+import type { RepoDetailsById } from '#/helpers/repo/details'
 import {
   DEFAULT_REPO_FILTERS,
   parseRepoFilters,
@@ -23,16 +23,17 @@ export const Route = createFileRoute('/')({
     // Not awaited: the list renders as soon as the search resolves, and each
     // row's details stream in (during SSR too) as their batch completes.
     // Skipped when a newer navigation superseded this one mid-search.
-    const details = abortController.signal.aborted
+    const details: RepoDetailsById = abortController.signal.aborted
       ? {}
       : requestRepoDetails(result.repos.map((r) => r.id))
-    return { ...result, details }
+    return { firstPage: result, details }
   },
   component: Home,
 })
 
 function Home() {
-  const { repositoryCount, repos, details } = Route.useLoaderData()
+  const { firstPage, details } = Route.useLoaderData()
+  const searchedFilters = Route.useLoaderDeps()
   // The pending location, not the committed match, so chips reflect clicks
   // immediately instead of after the search resolves.
   const filters = parseRepoFilters(useLocation({ select: (l) => l.search }))
@@ -65,20 +66,14 @@ function Home() {
         aria-busy={isLoading}
         className={`transition-opacity ${isLoading ? 'opacity-50' : ''}`}
       >
-        <p className="mt-6 text-sm text-gray-500">
-          {isLoading
-            ? 'Searching…'
-            : `${numberFormat.format(repositoryCount)} matches, showing ${repos.length}`}
-        </p>
-        <ul className="mt-4 divide-y divide-gray-100">
-          {repos.map((repo) => (
-            <RepoListItem
-              key={repo.id}
-              repo={repo}
-              details={details[repo.id]}
-            />
-          ))}
-        </ul>
+        <RepoResults
+          // A new search starts a fresh list; extra loaded pages are discarded.
+          key={JSON.stringify(searchedFilters)}
+          firstPage={firstPage}
+          firstPageDetails={details}
+          filters={searchedFilters}
+          isSearching={isLoading}
+        />
       </section>
     </main>
   )
