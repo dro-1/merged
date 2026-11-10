@@ -1,194 +1,122 @@
-Welcome to your new TanStack Start app!
+# merged
 
-# Getting Started
+Find open-source repositories that are ready for your first contribution.
 
-To run this application:
+merged searches GitHub for public repositories by language, framework and activity. It shows the signals that matter when picking a project to contribute to: open beginner issues, a license, a contributing guide, and how active the maintainers are.
+
+## Features
+
+- **Filters:** languages and frameworks (multi-select), minimum stars, minimum open _good first issue_ and _help wanted_ issues, and how recently the repo was pushed to. Every change applies immediately.
+- **Contributor readiness:** badges for open good-first-issue and help-wanted counts, plus the license (repos without one are flagged).
+- **Maintainer activity**, streamed in per repo after the list renders:
+  - a link to the contributing guide
+  - how long ago a PR was last merged
+  - merged PRs in the last 30 days
+  - the median time to close an issue
+- **Shareable URLs:** filters live in the query string as repeated keys, e.g. `/?langs=go&langs=rust&frameworks=react&minStars=500`. Default values are left out.
+- **Pagination:** 20 results per page with "Load more", up to 200 results. Past that, you're asked to narrow your filters.
+- **Resilient:**
+  - A failed search keeps the filters usable and offers a retry.
+  - GitHub rate limits get their own message.
+  - Raw upstream errors never reach the browser.
+- **Light and dark themes,** following your system setting. The layout works at phone width.
+
+## Getting started
+
+Requires Node.js 20.19+ (or 22.12+) and a GitHub token.
 
 ```bash
 npm install
-npm run dev
+cp .env.example .env   # then set GITHUB_TOKEN
+npm run dev            # http://localhost:3000
 ```
 
-# Building For Production
+### GitHub token
 
-To build this application for production:
+All GitHub requests are made on the server with your token. It is never sent to the browser.
 
-```bash
-npm run build
+1. Create a [fine-grained personal access token](https://github.com/settings/personal-access-tokens/new).
+2. Under **Repository access**, choose **Public repositories (read-only)**. No other permissions are needed.
+3. Put it in `.env` as `GITHUB_TOKEN=...`. The `.env` file is gitignored.
+
+## Scripts
+
+| Command           | What it does                                    |
+| ----------------- | ----------------------------------------------- |
+| `npm run dev`     | Start the dev server on port 3000               |
+| `npm run build`   | Production build (client and server) to `dist/` |
+| `npm run preview` | Serve the production build locally              |
+| `npm run lint`    | ESLint (`@tanstack/eslint-config`)              |
+| `npm run format`  | Prettier, then ESLint `--fix`                   |
+| `npm run check`   | Check formatting without writing                |
+
+## How it works
+
+### Two-phase loading
+
+A single GraphQL query that also fetched activity for a whole page took 9–11 seconds and sometimes returned a 502, so loading is split in two:
+
+1. **Search.** The route loader runs one GitHub search query, filtered by the qualifiers below. It returns names, stars, push date, license and the open label counts. The list renders as soon as this resolves.
+2. **Details.** Contributing guide and maintainer activity for each repo are fetched in batches of 5 (`nodes(ids:)`). The loader doesn't await these promises, so they stream into the server-rendered page, and each row fills in as its batch completes.
+
+The search string built from the filters looks like this:
+
+```
+is:public archived:false stars:>=50 pushed:>=2026-10-11
+language:"Go" language:"Rust" topic:react,vue good-first-issues:>2
 ```
 
-## Styling
+Repeated `language:` qualifiers match any of the listed languages, and `topic:a,b` matches any of the listed topics. Frameworks map to GitHub topics.
 
-This project uses [Tailwind CSS](https://tailwindcss.com/) for styling.
+### Caching
 
-### Removing Tailwind CSS
+The server keeps an in-memory TTL cache (5 minutes):
 
-If you prefer not to use Tailwind CSS:
+- **Search pages** are keyed by query string and cursor.
+- **Repo details** are cached per repository, so a repo that appears in several searches is fetched only once.
 
-1. Remove the demo pages in `src/routes/demo/`
-2. Replace the Tailwind import in `src/styles.css` with your own styles
-3. Remove `tailwindcss()` from the plugins array in `vite.config.ts`
-4. Remove `@tailwindcss/vite` and `tailwindcss` from `package.json`
+The cache stores promises, so concurrent identical requests share one GitHub call. Failed requests are evicted, so a retry really hits GitHub again. The cache is per process and is cleared on restart.
 
-## Linting & Formatting
+### Rate-limit cost
 
+Each search page and each details batch is one GraphQL query. Each has cost 1 when measured, against GitHub's budget of 5,000 points an hour per token. With caching, a first page is about 5 queries: one search plus four details batches.
 
-This project uses [eslint](https://eslint.org/) and [prettier](https://prettier.io/) for linting and formatting. Eslint is configured using [tanstack/eslint-config](https://tanstack.com/config/latest/docs/eslint). The following scripts are available:
+## Tech stack
 
-```bash
-npm run lint
-npm run format
-npm run check
+- [TanStack Start](https://tanstack.com/start) and [TanStack Router](https://tanstack.com/router): SSR, file-based routing, server functions, and loaders that stream deferred data.
+- [Tailwind CSS v4](https://tailwindcss.com/), with semantic colour tokens in `src/styles.css`.
+- [shadcn/ui](https://ui.shadcn.com/) primitives (Popover, Command, Select) on [Radix](https://www.radix-ui.com/) and [cmdk](https://cmdk.paco.me/).
+- The GitHub GraphQL API.
+
+## Project structure
+
+```
+src/
+├── routes/
+│   ├── __root.tsx          # HTML shell, fonts, app-wide error and not-found pages
+│   └── index.tsx           # search page: loader, filters, results, error state
+├── components/
+│   ├── RepoFilterPanel.tsx # filter toolbar and active-filter chips
+│   ├── MultiSelect.tsx     # searchable multi-select (Popover + Command)
+│   ├── RepoResults.tsx     # result list with "Load more"
+│   ├── RepoListItem.tsx    # one repo card: badges and streamed activity
+│   ├── StatusMessage.tsx   # error and empty notices
+│   └── ui/                 # shadcn components (generated, owned by the repo)
+├── server/                 # server-only: never bundled for the browser
+│   ├── github-client.ts    # authenticated GraphQL fetch, timeouts, rate-limit detection
+│   ├── github.ts           # queries, server functions, caches
+│   └── cache.ts            # promise-storing TTL cache
+├── helpers/
+│   ├── search/             # filter types and parsing, query building, URL format
+│   ├── repo/               # activity metrics and batched detail requests
+│   ├── errors.ts           # user-facing error messages
+│   └── format.ts           # number, date and duration formatting
+└── styles.css              # Tailwind theme tokens, light and dark
 ```
 
+## Known limitations
 
-
-## Routing
-
-This project uses [TanStack Router](https://tanstack.com/router) with file-based routing. Routes are managed as files in `src/routes`.
-
-### Adding A Route
-
-To add a new route to your application just add a new file in the `./src/routes` directory.
-
-TanStack will automatically generate the content of the route file for you.
-
-Now that you have two routes you can use a `Link` component to navigate between them.
-
-### Adding Links
-
-To use SPA (Single Page Application) navigation you will need to import the `Link` component from `@tanstack/react-router`.
-
-```tsx
-import { Link } from "@tanstack/react-router";
-```
-
-Then anywhere in your JSX you can use it like so:
-
-```tsx
-<Link to="/about">About</Link>
-```
-
-This will create a link that will navigate to the `/about` route.
-
-More information on the `Link` component can be found in the [Link documentation](https://tanstack.com/router/v1/docs/framework/react/api/router/linkComponent).
-
-### Using A Layout
-
-In the File Based Routing setup the layout is located in `src/routes/__root.tsx`. Anything you add to the root route will appear in all the routes. The route content will appear in the JSX where you render `{children}` in the `shellComponent`.
-
-Here is an example layout that includes a header:
-
-```tsx
-import { HeadContent, Scripts, createRootRoute } from '@tanstack/react-router'
-
-export const Route = createRootRoute({
-  head: () => ({
-    meta: [
-      { charSet: 'utf-8' },
-      { name: 'viewport', content: 'width=device-width, initial-scale=1' },
-      { title: 'My App' },
-    ],
-  }),
-  shellComponent: ({ children }) => (
-    <html lang="en">
-      <head>
-        <HeadContent />
-      </head>
-      <body>
-        <header>
-          <nav>
-            <Link to="/">Home</Link>
-            <Link to="/about">About</Link>
-          </nav>
-        </header>
-        {children}
-        <Scripts />
-      </body>
-    </html>
-  ),
-})
-```
-
-More information on layouts can be found in the [Layouts documentation](https://tanstack.com/router/latest/docs/framework/react/guide/routing-concepts#layouts).
-
-## Server Functions
-
-TanStack Start provides server functions that allow you to write server-side code that seamlessly integrates with your client components.
-
-```tsx
-import { createServerFn } from '@tanstack/react-start'
-
-const getServerTime = createServerFn({
-  method: 'GET',
-}).handler(async () => {
-  return new Date().toISOString()
-})
-
-// Use in a component
-function MyComponent() {
-  const [time, setTime] = useState('')
-  
-  useEffect(() => {
-    getServerTime().then(setTime)
-  }, [])
-  
-  return <div>Server time: {time}</div>
-}
-```
-
-## API Routes
-
-You can create API routes by using the `server` property in your route definitions:
-
-```tsx
-import { createFileRoute } from '@tanstack/react-router'
-import { json } from '@tanstack/react-start'
-
-export const Route = createFileRoute('/api/hello')({
-  server: {
-    handlers: {
-      GET: () => json({ message: 'Hello, World!' }),
-    },
-  },
-})
-```
-
-## Data Fetching
-
-There are multiple ways to fetch data in your application. You can use TanStack Query to fetch data from a server. But you can also use the `loader` functionality built into TanStack Router to load the data for a route before it's rendered.
-
-For example:
-
-```tsx
-import { createFileRoute } from '@tanstack/react-router'
-
-export const Route = createFileRoute('/people')({
-  loader: async () => {
-    const response = await fetch('https://swapi.dev/api/people')
-    return response.json()
-  },
-  component: PeopleComponent,
-})
-
-function PeopleComponent() {
-  const data = Route.useLoaderData()
-  return (
-    <ul>
-      {data.results.map((person) => (
-        <li key={person.name}>{person.name}</li>
-      ))}
-    </ul>
-  )
-}
-```
-
-Loaders simplify your data fetching logic dramatically. Check out more information in the [Loader documentation](https://tanstack.com/router/latest/docs/framework/react/guide/data-loading#loader-parameters).
-
-
-
-# Learn More
-
-You can learn more about all of the offerings from TanStack in the [TanStack documentation](https://tanstack.com).
-
-For TanStack Start specific documentation, visit [TanStack Start](https://tanstack.com/start).
+- **Exact label names only.** Beginner issues are counted from the exact labels `good first issue` and `help wanted`. Variants such as `beginner` or `easy` aren't matched.
+- **Bot closures count.** The median close time includes issues closed by stale bots, which can make maintainers look faster than they are.
+- **The cache is in memory.** It isn't shared between server instances and is lost on restart.
+- **No ranking.** Results come in GitHub's own order (best match).
