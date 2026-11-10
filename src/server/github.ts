@@ -2,6 +2,7 @@ import { createServerFn } from '@tanstack/react-start'
 import { medianCloseTimeMs, summarizeMerges } from '#/helpers/repo/metrics'
 import type { MergeActivity } from '#/helpers/repo/metrics'
 import { buildSearchQuery, parseRepoFilters } from '#/helpers/search/filters'
+import { GITHUB_RATE_LIMITED } from '#/helpers/errors'
 import { createTtlCache } from './cache'
 import { githubGraphQL } from './github-client'
 
@@ -224,6 +225,17 @@ async function fetchRepoDetails(
 }
 
 /**
+ * Logs a server-side failure in full and returns an error safe to send to a client:
+ * the rate-limit message is kept, anything else becomes a generic message.
+ */
+function toClientError(label: string, error: unknown): Error {
+  console.error(label, error)
+  const rateLimited =
+    error instanceof Error && error.message === GITHUB_RATE_LIMITED
+  return new Error(rateLimited ? GITHUB_RATE_LIMITED : 'GitHub request failed')
+}
+
+/**
  * Searches GitHub repositories matching the given filters, one page at a time.
  * Pass a previous result's `endCursor` as `after` for the next page. Runs only on the
  * server; identical page requests within the cache TTL reuse one GitHub request.
@@ -233,25 +245,32 @@ export const searchRepos = createServerFn({ method: 'GET' })
     filters: parseRepoFilters(input),
     after: parseCursor((input as { after?: unknown } | null)?.after),
   }))
-  .handler(({ data: { filters, after } }) => {
+  .handler(async ({ data: { filters, after } }) => {
     const query = buildSearchQuery(filters)
-    return searchCache.getOrLoad(`${query}|${after ?? ''}`, async () => {
-      const data = await githubGraphQL<{
-        search: {
-          repositoryCount: number
-          pageInfo: { endCursor: string | null; hasNextPage: boolean }
-          nodes: Array<SearchNode | null>
-        }
-      }>(SEARCH_REPOS_QUERY, { q: query, first: SEARCH_PAGE_SIZE, after })
-      return {
-        repositoryCount: data.search.repositoryCount,
-        repos: data.search.nodes
-          .filter((node): node is SearchNode => node !== null)
-          .map(toRepoSummary),
-        endCursor: data.search.pageInfo.endCursor,
-        hasNextPage: data.search.pageInfo.hasNextPage,
-      }
-    })
+    try {
+      return await searchCache.getOrLoad(
+        `${query}|${after ?? ''}`,
+        async () => {
+          const data = await githubGraphQL<{
+            search: {
+              repositoryCount: number
+              pageInfo: { endCursor: string | null; hasNextPage: boolean }
+              nodes: Array<SearchNode | null>
+            }
+          }>(SEARCH_REPOS_QUERY, { q: query, first: SEARCH_PAGE_SIZE, after })
+          return {
+            repositoryCount: data.search.repositoryCount,
+            repos: data.search.nodes
+              .filter((node): node is SearchNode => node !== null)
+              .map(toRepoSummary),
+            endCursor: data.search.pageInfo.endCursor,
+            hasNextPage: data.search.pageInfo.hasNextPage,
+          }
+        },
+      )
+    } catch (error) {
+      throw toClientError('[searchRepos]', error)
+    }
   })
 
 /**
@@ -280,7 +299,9 @@ export const getRepoDetails = createServerFn({ method: 'GET' })
       toFetch.length > 0 ? fetchRepoDetails(toFetch) : Promise.resolve({}),
     )
 
-    const results = await Promise.all(pending)
+    const results = await Promise.all(pending).catch((error: unknown) => {
+      throw toClientError('[getRepoDetails]', error)
+    })
     return Object.fromEntries(
       ids.flatMap((id, i) => {
         const details = results[i]
