@@ -1,4 +1,5 @@
 import { createServerFn } from '@tanstack/react-start'
+import { buildSearchQuery, parseRepoFilters } from '#/helpers/search/filters'
 
 const GITHUB_GRAPHQL_URL = 'https://api.github.com/graphql'
 
@@ -38,11 +39,12 @@ type GraphQLResponse = {
 }
 
 /**
- * Searches GitHub repositories with a fixed query via the GraphQL API.
+ * Searches GitHub repositories matching the given filters via the GraphQL API.
  * Runs only on the server, authenticating with the GITHUB_TOKEN env variable.
  */
-export const searchRepos = createServerFn({ method: 'GET' }).handler(
-  async (): Promise<RepoSearchResult> => {
+export const searchRepos = createServerFn({ method: 'GET' })
+  .validator(parseRepoFilters)
+  .handler(async ({ data: filters }): Promise<RepoSearchResult> => {
     const token = process.env.GITHUB_TOKEN
     if (!token) {
       throw new Error('GITHUB_TOKEN is not set')
@@ -57,7 +59,7 @@ export const searchRepos = createServerFn({ method: 'GET' }).handler(
       body: JSON.stringify({
         query: SEARCH_REPOS_QUERY,
         variables: {
-          q: 'language:typescript stars:>100 pushed:>2026-10-01',
+          q: buildSearchQuery(filters),
           first: 20,
         },
       }),
@@ -78,5 +80,4 @@ export const searchRepos = createServerFn({ method: 'GET' }).handler(
       repositoryCount: json.data.search.repositoryCount,
       repos: json.data.search.nodes,
     }
-  },
-)
+  })

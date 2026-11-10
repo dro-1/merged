@@ -1,5 +1,17 @@
+@import 'tailwindcss';
 
-@import "tailwindcss";
+@theme {
+  --animate-progress: progress 1.2s ease-in-out infinite;
+
+  @keyframes progress {
+    from {
+      transform: translateX(-100%);
+    }
+    to {
+      transform: translateX(300%);
+    }
+  }
+}
 
 * {
   box-sizing: border-box;
@@ -14,4 +26,3 @@ body,
 body {
   margin: 0;
 }
-
