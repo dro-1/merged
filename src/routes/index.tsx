@@ -5,29 +5,34 @@ import {
   useRouterState,
 } from '@tanstack/react-router'
 import { RepoFilterPanel } from '#/components/RepoFilterPanel'
+import { RepoListItem } from '#/components/RepoListItem'
+import { numberFormat } from '#/helpers/format'
+import { requestRepoDetails } from '#/helpers/repo/details'
 import {
   DEFAULT_REPO_FILTERS,
   parseRepoFilters,
 } from '#/helpers/search/filters'
 import { searchRepos } from '#/server/github'
 
-// Pinned locale and time zone so server-rendered text matches hydration.
-const numberFormat = new Intl.NumberFormat('en-US')
-const dateFormat = new Intl.DateTimeFormat('en-US', {
-  dateStyle: 'medium',
-  timeZone: 'UTC',
-})
-
 export const Route = createFileRoute('/')({
   validateSearch: parseRepoFilters,
   search: { middlewares: [stripSearchParams(DEFAULT_REPO_FILTERS)] },
   loaderDeps: ({ search }) => search,
-  loader: ({ deps }) => searchRepos({ data: deps }),
+  loader: async ({ deps, abortController }) => {
+    const result = await searchRepos({ data: deps })
+    // Not awaited: the list renders as soon as the search resolves, and each
+    // row's details stream in (during SSR too) as their batch completes.
+    // Skipped when a newer navigation superseded this one mid-search.
+    const details = abortController.signal.aborted
+      ? {}
+      : requestRepoDetails(result.repos.map((r) => r.id))
+    return { ...result, details }
+  },
   component: Home,
 })
 
 function Home() {
-  const { repositoryCount, repos } = Route.useLoaderData()
+  const { repositoryCount, repos, details } = Route.useLoaderData()
   // The pending location, not the committed match, so chips reflect clicks
   // immediately instead of after the search resolves.
   const filters = parseRepoFilters(useLocation({ select: (l) => l.search }))
@@ -65,15 +70,13 @@ function Home() {
             ? 'Searching…'
             : `${numberFormat.format(repositoryCount)} matches, showing ${repos.length}`}
         </p>
-        <ul className="mt-6 space-y-2">
+        <ul className="mt-4 divide-y divide-gray-100">
           {repos.map((repo) => (
-            <li key={repo.nameWithOwner}>
-              <a href={repo.url} className="text-blue-600 hover:underline">
-                {repo.nameWithOwner}
-              </a>{' '}
-              · ★ {numberFormat.format(repo.stargazerCount)} · pushed{' '}
-              {dateFormat.format(new Date(repo.pushedAt))}
-            </li>
+            <RepoListItem
+              key={repo.id}
+              repo={repo}
+              details={details[repo.id]}
+            />
           ))}
         </ul>
       </section>
