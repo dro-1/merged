@@ -11,12 +11,15 @@ import { RepoFilterPanel } from '#/components/RepoFilterPanel'
 import { RepoResults } from '#/components/RepoResults'
 import { StatusMessage, statusActionClass } from '#/components/StatusMessage'
 import { describeLoadError } from '#/helpers/errors'
+import { SITE_DESCRIPTION, SITE_NAME, SITE_URL } from '#/helpers/site'
 import { requestRepoDetails } from '#/helpers/repo/details'
 import type { RepoDetailsById } from '#/helpers/repo/details'
 import {
   DEFAULT_REPO_FILTERS,
+  omitDefaultFilters,
   parseRepoFilters,
 } from '#/helpers/search/filters'
+import { stringifySearch } from '#/helpers/search/url'
 import { searchRepos } from '#/server/github'
 
 export const Route = createFileRoute('/')({
@@ -32,6 +35,16 @@ export const Route = createFileRoute('/')({
       ? {}
       : requestRepoDetails(result.repos.map((r) => r.id))
     return { firstPage: result, details }
+  },
+  // Share URLs keep the filters; this overrides the root route's home-page og:url.
+  head: ({ match }) => {
+    const url = `${SITE_URL}/${stringifySearch(omitDefaultFilters(match.search))}`
+    return {
+      meta: [
+        { property: 'og:url', content: url },
+        { name: 'twitter:url', content: url },
+      ],
+    }
   },
   component: Home,
   errorComponent: SearchError,
@@ -108,10 +121,22 @@ function SearchShell({ children }: { children: React.ReactNode }) {
       )}
 
       <header>
-        <h1 className="text-3xl font-semibold tracking-tight">merged</h1>
-        <p className="mt-2 text-muted-foreground">
-          Find open-source repos ready for your first contribution.
-        </p>
+        <h1>
+          <picture>
+            <source
+              srcSet="/logo-dark.svg"
+              media="(prefers-color-scheme: dark)"
+            />
+            <img
+              src="/logo.svg"
+              alt={SITE_NAME}
+              width={177}
+              height={40}
+              className="h-9 w-auto"
+            />
+          </picture>
+        </h1>
+        <p className="mt-3 text-muted-foreground">{SITE_DESCRIPTION}</p>
       </header>
 
       <div className="mt-6">

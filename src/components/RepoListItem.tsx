@@ -23,6 +23,8 @@ export function RepoListItem({ repo, details }: RepoListItemProps) {
       <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
         <a
           href={repo.url}
+          target="_blank"
+          rel="noopener noreferrer"
           className="font-semibold break-all text-fg hover:text-primary"
         >
           {repo.nameWithOwner}
@@ -81,6 +83,8 @@ function DetailsLine({ details }: { details: RepoDetails | null }) {
         <>
           <a
             href={contributingUrl}
+            target="_blank"
+            rel="noopener noreferrer"
             className="font-medium text-primary hover:underline"
           >
             Contributing guide

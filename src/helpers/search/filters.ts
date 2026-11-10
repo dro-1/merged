@@ -79,6 +79,20 @@ export function parseRepoFilters(input: unknown): RepoFilters {
 }
 
 /**
+ * Returns only the filters that differ from DEFAULT_REPO_FILTERS, in the same key order.
+ * e.g. { ...DEFAULT_REPO_FILTERS, minStars: 500 } → { minStars: 500 }
+ */
+export function omitDefaultFilters(filters: RepoFilters): Partial<RepoFilters> {
+  return Object.fromEntries(
+    Object.entries(filters).filter(
+      ([key, value]) =>
+        JSON.stringify(value) !==
+        JSON.stringify(DEFAULT_REPO_FILTERS[key as keyof RepoFilters]),
+    ),
+  )
+}
+
+/**
  * Turns filters into a GitHub repository search string, with dates relative to `now`.
  * Repeated `language:` qualifiers match any of them; `topic:a,b` matches either topic.
  * e.g. { langs: ['go','rust'], frameworks: ['react','vue'], ... } →

@@ -12,6 +12,7 @@ import { TanStackDevtools } from '@tanstack/react-devtools'
 
 import { StatusMessage, statusActionClass } from '#/components/StatusMessage'
 import { DEFAULT_REPO_FILTERS } from '#/helpers/search/filters'
+import { SITE_DESCRIPTION, SITE_NAME, SITE_URL } from '#/helpers/site'
 import appCss from '../styles.css?url'
 
 export const Route = createRootRoute({
@@ -24,11 +25,32 @@ export const Route = createRootRoute({
         name: 'viewport',
         content: 'width=device-width, initial-scale=1',
       },
+      { title: SITE_NAME },
+      { name: 'description', content: SITE_DESCRIPTION },
+      // Share previews; crawlers need absolute URLs, hence SITE_URL.
+      { property: 'og:type', content: 'website' },
+      { property: 'og:site_name', content: SITE_NAME },
+      { property: 'og:title', content: SITE_NAME },
+      { property: 'og:description', content: SITE_DESCRIPTION },
+      { property: 'og:url', content: `${SITE_URL}/` },
+      { property: 'og:image', content: `${SITE_URL}/og-image.png` },
+      { property: 'og:image:width', content: '1200' },
+      { property: 'og:image:height', content: '630' },
       {
-        title: 'merged',
+        property: 'og:image:alt',
+        content: `${SITE_NAME}: ${SITE_DESCRIPTION}`,
       },
+      { name: 'twitter:card', content: 'summary_large_image' },
+      { name: 'twitter:url', content: `${SITE_URL}/` },
+      { name: 'twitter:title', content: SITE_NAME },
+      { name: 'twitter:description', content: SITE_DESCRIPTION },
+      { name: 'twitter:image', content: `${SITE_URL}/twitter-card.png` },
     ],
     links: [
+      { rel: 'icon', href: '/favicon.ico', sizes: '48x48' },
+      { rel: 'icon', href: '/favicon.svg', type: 'image/svg+xml' },
+      { rel: 'apple-touch-icon', href: '/apple-touch-icon.png' },
+      { rel: 'manifest', href: '/site.webmanifest' },
       { rel: 'preconnect', href: 'https://fonts.googleapis.com' },
       {
         rel: 'preconnect',
@@ -107,6 +129,18 @@ function RootDocument({ children }: { children: React.ReactNode }) {
     <html lang="en">
       <head>
         <HeadContent />
+        {/* Rendered directly: head() keeps only one meta per name, and the
+            browser UI colour needs one per colour scheme. */}
+        <meta
+          name="theme-color"
+          content="#f7f8fa"
+          media="(prefers-color-scheme: light)"
+        />
+        <meta
+          name="theme-color"
+          content="#0f1218"
+          media="(prefers-color-scheme: dark)"
+        />
       </head>
       <body>
         {children}
