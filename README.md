@@ -120,3 +120,10 @@ src/
 - **Bot closures count.** The median close time includes issues closed by stale bots, which can make maintainers look faster than they are.
 - **The cache is in memory.** It isn't shared between server instances and is lost on restart.
 - **No ranking.** Results come in GitHub's own order (best match).
+
+## Possible next steps
+
+- **Sort options.** Let users order results by stars, most recent push, or good-first-issue count. GitHub search supports these sorts natively, so they cost nothing extra.
+- **Label variants.** Also count common beginner labels such as `beginner`, `easy` and `good-first-issue`. This adds fields to the details query.
+- **Deployment.** Pick a host and set `GITHUB_TOKEN` there. The in-memory cache works as is on a single instance; multiple instances would need a shared cache such as Redis.
+- **Tests.** Add unit tests for the pure functions: `buildSearchQuery`, `parseRepoFilters`, the URL `parseSearch`/`stringifySearch`, and the activity metrics.
