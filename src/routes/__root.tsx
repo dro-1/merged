@@ -47,6 +47,8 @@ export const Route = createRootRoute({
       { name: 'twitter:image', content: `${SITE_URL}/twitter-card.png` },
     ],
     links: [
+      // Filtered search URLs canonicalise to the home page, so crawlers index one page.
+      { rel: 'canonical', href: `${SITE_URL}/` },
       { rel: 'icon', href: '/favicon.ico', sizes: '48x48' },
       { rel: 'icon', href: '/favicon.svg', type: 'image/svg+xml' },
       { rel: 'apple-touch-icon', href: '/apple-touch-icon.png' },
