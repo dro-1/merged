@@ -11,6 +11,7 @@ import { TanStackRouterDevtoolsPanel } from '@tanstack/react-router-devtools'
 import { TanStackDevtools } from '@tanstack/react-devtools'
 
 import { StatusMessage, statusActionClass } from '#/components/StatusMessage'
+import { UMAMI_WEBSITE_ID } from '#/helpers/analytics'
 import { DEFAULT_REPO_FILTERS } from '#/helpers/search/filters'
 import { SITE_DESCRIPTION, SITE_NAME, SITE_URL } from '#/helpers/site'
 import appCss from '../styles.css?url'
@@ -66,6 +67,16 @@ export const Route = createRootRoute({
       {
         rel: 'stylesheet',
         href: appCss,
+      },
+    ],
+    scripts: [
+      // Cookieless page views (including client-side navigations) and events;
+      // data-domains keeps local dev and deploy previews out of the stats.
+      {
+        src: 'https://cloud.umami.is/script.js',
+        defer: true,
+        'data-website-id': UMAMI_WEBSITE_ID,
+        'data-domains': 'merged.seuntee.dev',
       },
     ],
   }),

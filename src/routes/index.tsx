@@ -10,6 +10,7 @@ import type { ErrorComponentProps } from '@tanstack/react-router'
 import { RepoFilterPanel } from '#/components/RepoFilterPanel'
 import { RepoResults } from '#/components/RepoResults'
 import { StatusMessage, statusActionClass } from '#/components/StatusMessage'
+import { trackSearch } from '#/helpers/analytics'
 import { describeLoadError } from '#/helpers/errors'
 import { SITE_DESCRIPTION, SITE_NAME, SITE_URL } from '#/helpers/site'
 import { requestRepoDetails } from '#/helpers/repo/details'
@@ -54,6 +55,12 @@ function Home() {
   const { firstPage, details } = Route.useLoaderData()
   const searchedFilters = Route.useLoaderDeps()
   const isLoading = useRouterState({ select: (s) => s.isLoading })
+
+  // Keyed by value: one event per completed search, not per re-render.
+  const filtersKey = JSON.stringify(searchedFilters)
+  useEffect(() => {
+    trackSearch(searchedFilters)
+  }, [filtersKey])
 
   return (
     <SearchShell>
