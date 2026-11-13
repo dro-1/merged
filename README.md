@@ -12,7 +12,7 @@ merged searches GitHub for public repositories by language, framework and activi
   - a link to the contributing guide
   - how long ago a PR was last merged
   - merged PRs in the last 30 days
-  - the median time to close an issue
+  - the median time to close an issue, from recently closed issues marked completed
 - **Shareable URLs:** filters live in the query string as repeated keys, e.g. `/?langs=go&langs=rust&frameworks=react&minStars=500`. Default values are left out.
 - **Pagination:** 20 results per page with "Load more", up to 200 results. Past that, you're asked to narrow your filters.
 - **Resilient:**
@@ -117,7 +117,7 @@ src/
 ## Known limitations
 
 - **Exact label names only.** Beginner issues are counted from the exact labels `good first issue` and `help wanted`. Variants such as `beginner` or `easy` aren't matched.
-- **Bot closures count.** The median close time includes issues closed by stale bots, which can make maintainers look faster than they are.
+- **"Completed" is the default close reason.** The median close time skips issues closed as not planned or duplicate, but an issue closed with the plain "Close issue" button counts as completed even if nothing was fixed. When most recent closures are skipped, the median may rest on only a few issues.
 - **The cache is in memory.** It isn't shared between server instances and is lost on restart.
 - **No ranking.** Results come in GitHub's own order (best match).
 

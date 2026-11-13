@@ -7,7 +7,7 @@ import { createTtlCache } from './cache'
 import { githubGraphQL } from './github-client'
 
 const MERGED_PR_SAMPLE = 30
-const CLOSED_ISSUE_SAMPLE = 10
+const CLOSED_ISSUE_SAMPLE = 20
 const CACHE_TTL_MS = 5 * 60 * 1000
 
 /** Maximum number of repositories per getRepoDetails call. */
@@ -67,6 +67,7 @@ const REPO_DETAILS_QUERY = /* GraphQL */ `
             mergedAt
           }
         }
+        # Issues can't be filtered by close reason here; non-COMPLETED ones are dropped after fetching.
         closedIssues: issues(
           states: CLOSED
           first: ${CLOSED_ISSUE_SAMPLE}
@@ -75,6 +76,7 @@ const REPO_DETAILS_QUERY = /* GraphQL */ `
           nodes {
             createdAt
             closedAt
+            stateReason
           }
         }
       }
@@ -106,7 +108,7 @@ export type RepoSearchResult = {
 export type RepoDetails = {
   contributingUrl: string | null
   merges: MergeActivity
-  /** Median open-to-close time of recently closed issues, or null if none were sampled. */
+  /** Median open-to-close time of recently closed issues marked completed, or null if none were sampled. */
   medianIssueCloseMs: number | null
 }
 
@@ -126,7 +128,11 @@ type DetailsNode = {
   contributingGuidelines: { url: string | null } | null
   mergedPullRequests: { nodes: Array<{ mergedAt: string | null } | null> }
   closedIssues: {
-    nodes: Array<{ createdAt: string; closedAt: string | null } | null>
+    nodes: Array<{
+      createdAt: string
+      closedAt: string | null
+      stateReason: string | null
+    } | null>
   }
 }
 
@@ -154,8 +160,9 @@ function toRepoDetails(node: DetailsNode, now: number): RepoDetails {
   const mergedAts = node.mergedPullRequests.nodes.flatMap((pr) =>
     pr?.mergedAt ? [pr.mergedAt] : [],
   )
+  // Not-planned and duplicate closures are often instant, so they'd skew the median low.
   const closedIssues = node.closedIssues.nodes.flatMap((issue) =>
-    issue?.closedAt
+    issue?.closedAt && issue.stateReason === 'COMPLETED'
       ? [{ createdAt: issue.createdAt, closedAt: issue.closedAt }]
       : [],
   )
